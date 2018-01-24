@@ -1,5 +1,9 @@
 dist: trusty
 sudo: false
+
+services:
+  - docker
+  
 env:
   global:
   - secure: "mD3RBWzc5aThrUKa60flWefcyZf2RWqtz15x7/keuIuVZVLs6pxxJr2W5jAY945iJRxSpvkiWYaa4ADjcNUitJ2xSaF9K9onn83QD7i03+4fyptqa7ZU3CJx+J+BmiKQT4vbFhzMEjxwHWQsQ5ufXeEW+O1irJl/IEUUpJPsn7eaiwR6Ke5HfhCQ13M/efHceewKfvUMcMPkL3xPAyzgor5QEns7UNUdSGUPplrNGYOoy8p1F6WSwhF1c0OymhN7RMGRvG2krgOeyFaw7lQeIjJZoU1xRb0GSydAF/EiL18bCSyxOfQtVHoPVurQ6OZYamV6qP7SbdIJyFewvcp2wUH7h8DgGbie2/fOw2CpjhSJqyqWWHZdvZJt0gM4MA/CtdDre5M6SUIq0FrNC+qIF6ROfcwvlUpcOfV78bo4UWo6aBV0CvJ5KmZl6fCiAUhjuOMVCnx6SHrrjiyD1YPa7pDLRenHM66rrttgI+39WvuF1cInCD/XOinNy7gbxE+gA2OtVhKQCixaTFchLPuG8lrLTIhyteHk+D/FaP0TeF2sTJ4coze1M1XuXCyDlHEc+lgMsR0zNNtgAQeQANVeKh9ITkJWfxELLv7S/W9axySWseWxC0S4Y2PN0JALcAZjNwq73uLWCgiOPHIs+ygVlYEUHyTOPDHHcR6LEOeMBpo="
@@ -7,26 +11,25 @@ env:
 language: c
 compiler: gcc
 
-addons:
-  apt:
-    sources:
-    - ubuntu-toolchain-r-test
-    packages:
-    - gcc-6
-    - g++-6
-    - cmake
-
 before_install:
 - pip install --user awscli
-- export PATH=$PATH:$HOME/.local/bin
+- docker pull intrigus/docker-raspberry-pi-cross-compiler
+- docker run intrigus/docker-raspberry-pi-cross-compiler > ~/bin/rpxc
+- chmod +x ~/bin/rpxc
+- export PATH=$PATH:$HOME/bin:$HOME/.local/bin
+- export RPXC_IMAGE=intrigus/docker-raspberry-pi-cross-compiler
+- echo "PKG_CONFIG_DIR=" >> .lwjgl_env_rpxc
+- echo "PKG_CONFIG_LIBDIR=${LWJGL_BUILD_SYSROOT}/usr/lib/pkgconfig:${LWJGL_BUILD_SYSROOT}/usr/share/pkgconfig:${LWJGL_BUILD_SYSROOT}/usr/lib/arm-linux-gnueabihf/pkgconfig:${LWJGL_BUILD_SYSROOT}/usr/share/arm-linux-gnueabihf/pkgconfig" >> .lwjgl_env_rpxc
+- echo "PKG_CONFIG_SYSROOT_DIR=${LWJGL_BUILD_SYSROOT}" >> .lwjgl_env_rpxc
+
 
 script:
 - mkdir build
 - cd build
 #- CC="gcc-6" CXX="g++-6" cmake -DASSIMP_BUILD_ASSIMP_TOOLS=OFF -DASSIMP_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--wrap,memcpy ..
-- CC="gcc-6" CXX="g++-6" cmake -DASSIMP_BUILD_ASSIMP_TOOLS=OFF -DASSIMP_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--wrap,memcpy ..
-- cmake --build .
-- strip code/libassimp.so
-- "aws s3 cp code/libassimp.so s3://build.lwjgl.org/nightly/linux/x64/ --acl public-read --storage-class REDUCED_REDUNDANCY --cache-control \"public, must-revalidate, proxy-revalidate, max-age=0\""
-- "git log --pretty=format:%H HEAD~2..HEAD~1 | head -n 1 > revision.git"
-- "aws s3 cp revision.git s3://build.lwjgl.org/nightly/linux/x64/libassimp.so.git --acl public-read --storage-class REDUCED_REDUNDANCY --cache-control \"public, must-revalidate, proxy-revalidate, max-age=0\""
+- rpxc --args "--env-file .lwjgl_env_rpxc" bash -c 'CC="arm-linux-gnueabihf-gcc" CXX="arm-linux-gnueabihf-g++" cmake -DASSIMP_BUILD_ASSIMP_TOOLS=OFF -DASSIMP_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release ..'
+- rpxc --args "--env-file .lwjgl_env_rpxc" bash -c 'cmake --build .'
+- rpxc --args "--env-file .lwjgl_env_rpxc" bash -c 'arm-linux-gnueabihf-strip code/libassimp.so'
+#- "aws s3 cp code/libassimp.so s3://build.lwjgl.org/nightly/linux/x64/ --acl public-read --storage-class REDUCED_REDUNDANCY --cache-control \"public, must-revalidate, proxy-revalidate, max-age=0\""
+#- "git log --pretty=format:%H HEAD~2..HEAD~1 | head -n 1 > revision.git"
+#- "aws s3 cp revision.git s3://build.lwjgl.org/nightly/linux/x64/libassimp.so.git --acl public-read --storage-class REDUCED_REDUNDANCY --cache-control \"public, must-revalidate, proxy-revalidate, max-age=0\""
